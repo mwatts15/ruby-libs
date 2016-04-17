@@ -1,3 +1,4 @@
+require 'open3'
 def dmenu (entries, prompt='select an item', height=false,
               width="100%",
               fg_color='"#FFFFFF"',
@@ -8,24 +9,31 @@ def dmenu (entries, prompt='select an item', height=false,
         height=entries.count
     end
     res = ""
-    font_width=14 #in pixels
+    font_width = 14 #in pixels
     entries.collect! do |line|
         l, r = line.split("|||")
         r ? l.alignr(r.scrunch(width / font_width), width) : l
     end
-    font='"Sazanami Mincho":pixelsize=' + font_width.to_s
-    cmdline = "dmenu run -f -p \"#{prompt}\" -nf #{fg_color} \
+    font = '"Sazanami Mincho":pixelsize=' + font_width.to_s
+    cmdline = "dmenu -f -p \"#{prompt}\" -nf #{fg_color} \
     -nb #{bg_color} \
     -sb #{sel_bg_color} \
     -sf #{sel_fg_color} \
     -i -l #{height} \
     -w #{width} \
     -fn #{font}"
-    IO.popen(cmdline, "w+") do |io|
-        io.print(entries.join("\n"))
-        #IO.popen("urxvt -e \"gdb -p #{io.pid}\"")
-        io.close_write
-        res = io.gets
+    err_messages = nil
+    Open3.popen3(cmdline) do |i, o, e, t|
+        i.print(entries.join("\n"))
+        i.close
+        err_messages = e.read
+        res = o.gets
+    end
+    stat = $?
+    if stat != 0
+        if err_messages.include?("Error")
+            raise Exception.new("Couldn't print list: #{stat}\n#{err_messages}")
+        end
     end
     res.to_s.chomp
 end
